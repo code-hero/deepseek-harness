@@ -45,10 +45,9 @@ function koffiNativePackage(): string {
   return `@koromix/koffi-${target.platform}-${target.arch}`
 }
 
-/** Windows exposes package managers and built-in Unix tools as executable shims. */
+/** Windows exposes built-in Unix tools as executable shims. */
 function hostCommand(command: string): string {
   if (process.platform !== 'win32') return command
-  if (command === 'pnpm' || command === 'npm') return `${command}.cmd`
   if (command === 'curl' || command === 'tar') return `${command}.exe`
   return command
 }
@@ -56,7 +55,8 @@ function hostCommand(command: string): string {
 /** Run one build tool and fail with its process status. */
 function run(command: string, args: readonly string[], cwd: string = root): void {
   const executable = hostCommand(command)
-  const result = spawnSync(executable, args, { cwd, stdio: 'inherit' })
+  const shell = process.platform === 'win32' && (command === 'pnpm' || command === 'npm')
+  const result = spawnSync(executable, args, { cwd, stdio: 'inherit', shell })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${executable} ${args.join(' ')} exited with ${String(result.status)}`)
 }
