@@ -18,6 +18,11 @@
     },
     "macOS": {
       "minimumSystemVersion": "14.0"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
     }
   }
 }

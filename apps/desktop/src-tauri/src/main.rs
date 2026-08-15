@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::{
     env,
     fs::{create_dir_all, File},
@@ -60,7 +62,11 @@ fn main() {
         .manage(HarnessProcess(Mutex::new(None)))
         .setup(|app| {
             let runtime = app.path().resource_dir()?.join("runtime");
-            let node = runtime.join(if cfg!(target_os = "windows") { "node.exe" } else { "node" });
+            let node = runtime.join(if cfg!(target_os = "windows") {
+                "node.exe"
+            } else {
+                "node"
+            });
             let entry = runtime.join("node_modules/@deepseek-ai/dsh/lib/bin.js");
             let data = app_data_dir(app)?;
             let log = File::create(data.join("server.log"))?;
@@ -69,14 +75,17 @@ fn main() {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data.clone());
 
-            let mut child = Command::new(node)
+            let mut command = Command::new(node);
+            command
                 .arg(entry)
                 .args(["web", "--host", "127.0.0.1", "--port", &port.to_string()])
                 .current_dir(working_directory)
                 .env("DSH_HOME", data.join("dsh"))
                 .stdout(Stdio::from(log.try_clone()?))
-                .stderr(Stdio::from(log))
-                .spawn()?;
+                .stderr(Stdio::from(log));
+            #[cfg(target_os = "windows")]
+            command.creation_flags(0x08000000);
+            let mut child = command.spawn()?;
 
             if let Err(error) = wait_for_server(port) {
                 let _ = child.kill();
