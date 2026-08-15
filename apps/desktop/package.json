@@ -1,0 +1,17 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "Tauri shell for the self-contained DeepSeek Harness Web runtime",
+  "version": "0.1.0-rc.5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare-runtime": "tsx scripts/prepare-runtime.ts",
+    "prepare-runtime:windows": "tsx scripts/prepare-runtime.ts --platform win32 --arch x64",
+    "bundle:macos": "pnpm run prepare-runtime && tauri build --bundles dmg",
+    "bundle:windows": "pnpm run prepare-runtime:windows && tauri build --bundles nsis --ci"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "tsx": "^4.22.4"
+  }
+}

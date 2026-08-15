@@ -1,0 +1,4 @@
+.runtime-tarballs/
+.runtime-downloads/
+src-tauri/resources/runtime/
+src-tauri/target/
