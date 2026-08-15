@@ -45,11 +45,20 @@ function koffiNativePackage(): string {
   return `@koromix/koffi-${target.platform}-${target.arch}`
 }
 
+/** Windows exposes package managers and built-in Unix tools as executable shims. */
+function hostCommand(command: string): string {
+  if (process.platform !== 'win32') return command
+  if (command === 'pnpm' || command === 'npm') return `${command}.cmd`
+  if (command === 'curl' || command === 'tar') return `${command}.exe`
+  return command
+}
+
 /** Run one build tool and fail with its process status. */
 function run(command: string, args: readonly string[], cwd: string = root): void {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit' })
+  const executable = hostCommand(command)
+  const result = spawnSync(executable, args, { cwd, stdio: 'inherit' })
   if (result.error !== undefined) throw result.error
-  if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status)}`)
+  if (result.status !== 0) throw new Error(`${executable} ${args.join(' ')} exited with ${String(result.status)}`)
 }
 
 /** Pack a release family and return its local tarball dependency entries. */
