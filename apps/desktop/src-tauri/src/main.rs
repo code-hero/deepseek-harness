@@ -4,7 +4,7 @@ use std::{
     env,
     fs::{create_dir_all, File},
     io,
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
@@ -15,10 +15,39 @@ use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 struct HarnessProcess(Mutex<Option<Child>>);
 
-fn reserve_loopback_port() -> io::Result<u16> {
-    TcpListener::bind("127.0.0.1:0")?
-        .local_addr()
-        .map(|address| address.port())
+const DEFAULT_DESKTOP_PORT: u16 = 64818;
+
+fn configured_external_url() -> Result<Option<tauri::Url>, Box<dyn std::error::Error>> {
+    let Some(value) = env::var_os("DSH_DESKTOP_URL") else {
+        return Ok(None);
+    };
+    let value = value.to_string_lossy();
+    let url = value.parse::<tauri::Url>().map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("DSH_DESKTOP_URL must be a valid URL: {error}"),
+        )
+    })?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "DSH_DESKTOP_URL must use http or https",
+        )
+        .into());
+    }
+    Ok(Some(url))
+}
+
+fn configured_loopback_port() -> io::Result<u16> {
+    if let Some(value) = env::var_os("DSH_DESKTOP_PORT") {
+        return value.to_string_lossy().parse::<u16>().map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("DSH_DESKTOP_PORT must be a valid port: {error}"),
+            )
+        });
+    }
+    Ok(DEFAULT_DESKTOP_PORT)
 }
 
 fn wait_for_server(port: u16) -> io::Result<()> {
@@ -61,6 +90,16 @@ fn main() {
     let app = tauri::Builder::default()
         .manage(HarnessProcess(Mutex::new(None)))
         .setup(|app| {
+            let external_url = configured_external_url()?;
+            if let Some(url) = external_url {
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                    .title("DeepSeek Harness")
+                    .inner_size(1440.0, 900.0)
+                    .min_inner_size(960.0, 640.0)
+                    .build()?;
+                return Ok(());
+            }
+
             let runtime = app.path().resource_dir()?.join("runtime");
             let node = runtime.join(if cfg!(target_os = "windows") {
                 "node.exe"
@@ -70,7 +109,7 @@ fn main() {
             let entry = runtime.join("node_modules/@deepseek-ai/dsh/lib/bin.js");
             let data = app_data_dir(app)?;
             let log = File::create(data.join("server.log"))?;
-            let port = reserve_loopback_port()?;
+            let port = configured_loopback_port()?;
             let working_directory = env::var_os("HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data.clone());

@@ -71,6 +71,15 @@ describe('Session', () => {
     expect(structuredClone(turnEnd.data.reason)).toEqual({ kind: 'max-tokens' })
   })
 
+  it('preserves the ignorable marker on plugin-owned events', () => {
+    const session = Session.create(SessionId('ignorable-append'))
+    const event = session.append('turn/start', { turn: 1 }, { ignorable: true })
+
+    expect(event.ignorable).toBe(true)
+    expect(Session.create(SessionId('ignorable-replay'), structuredClone(session.events)).events[0]?.ignorable)
+      .toBe(true)
+  })
+
   it('round-trips an aborted turn with its cancellation cause', () => {
     const session = Session.create(SessionId('aborted'))
     session.append('turn/start', { turn: 1 })

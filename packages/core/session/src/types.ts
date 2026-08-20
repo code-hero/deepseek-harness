@@ -377,7 +377,13 @@ export type SurfaceOp =
  * Surface placement and cited source-event seqs for {@link Session.append}. Required on
  * message-producing events and forbidden on log-only events.
  */
-export interface SurfaceIntent {
+/** Optional envelope metadata accepted when appending any session event. */
+export interface SessionEventOptions {
+  /** Marks an informational plugin event safe for older readers to skip. */
+  readonly ignorable?: true
+}
+
+export interface SurfaceIntent extends SessionEventOptions {
   surfaceOp: SurfaceOp
   /**
    * Complete set of known source-event seqs. `assistant/message` may use a
