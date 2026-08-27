@@ -105,6 +105,25 @@ describe('todos projection provider', () => {
     expect(cleared?.asOfSeq).toBe(session.seq - 1)
   })
 
+  it('returns active work to pending when a turn is stopped', async () => {
+    const bench = await harness(true)
+    const session = bench.session
+    seedMessage(session)
+    const list: TodoItem[] = [
+      { content: 'keep', status: 'completed' },
+      { content: 'resume', status: 'in_progress' },
+      { content: 'later', status: 'pending' },
+    ]
+    session.append('todo/write', { todos: list })
+    session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+
+    expect((await bench.tailProjections())?.values.todos).toEqual([
+      { content: 'keep', status: 'completed' },
+      { content: 'resume', status: 'pending' },
+      { content: 'later', status: 'pending' },
+    ])
+  })
+
   it('has no todos key when tool-todo is not composed', async () => {
     const bench = await harness(false)
     seedMessage(bench.session)

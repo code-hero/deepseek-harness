@@ -120,6 +120,19 @@ const todosProjectionSchema: ZodType<TodoItem[] | null> = zod.union([
 ])
 
 /**
+ * A non-completed turn can be cancelled, fail, exhaust its token budget, or be
+ * recovered after an interruption. Its plan must not keep claiming work is
+ * active: the next turn may resume these items, so return them to pending
+ * while retaining completed work.
+ */
+function releaseStoppedTodos(state: TodoItem[] | null): TodoItem[] | null {
+  if (state === null || !state.some(item => item.status === 'in_progress')) return state
+  return state.map(item => item.status === 'in_progress'
+    ? { ...item, status: 'pending' }
+    : item)
+}
+
+/**
  * Register the `todo_write` tool on `ctx.tools` and, when the session-projection seam is composed,
  * the `todos` unit.
  * @param ctx - registrant context carrying the tool registry.
@@ -129,9 +142,9 @@ export function apply(ctx: Context, config: Config): void {
   const allowParallel = config.allowParallelInProgress
   // The unit child activates only when a projection registry is composed
   // (headless assemblies without the seam stay unaffected). Standing-plan fold:
-  // latest whole todo/write list, cleared by the next turn/start (turn/end keeps
-  // the finished checklist visible); null before the first write or after a
-  // later turn begins; every other event returns the same state reference.
+  // latest whole todo/write list, cleared by the next turn/start. A normally
+  // completed turn preserves the final checklist; a stopped turn releases
+  // active work back to pending so the UI never leaves a stale spinner behind.
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register<'todos', TodoItem[] | null>({
       key: 'todos',
@@ -140,10 +153,13 @@ export function apply(ctx: Context, config: Config): void {
       apply: (state, event) => {
         if (event.type === 'todo/write') return event.data.todos
         if (event.type === 'turn/start') return null
+        if (event.type === 'turn/end' && event.data.reason.kind !== 'completed') {
+          return releaseStoppedTodos(state)
+        }
         return state
       },
       view: state => state,
-      stateVersion: 2,
+      stateVersion: 3,
     })
   })
   ctx.tools.register(defineTool({
